@@ -1,7 +1,354 @@
-<!DOCTYPE html><html>
-	<body>
-		Temporary page.
-		<br>
-		Tile Layer might release end of May / early June
-	</body>
+<!DOCTYPE html><html lang="en">
+<head>
+	<title>Tile Layer</title>
+	<link rel="shortcut icon" type="image/png" href="img/icon.png">
+	<link rel="stylesheet" href="style.css">
+
+	<meta charset="UTF-8">
+	<meta name="description" content="Browser based map editing / pixel art tool in JavaScript">
+	<meta name="keywords" content="tiles, tileset, map editor, game development, game tool, editor, online, free">
+	<meta name="author" content="lemocha">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body onbeforeunload="if (!dataSaved) { return false; }">
+	<noscript>
+		<div style="position: fixed; width: 100%; height: 100%; top: 0; left: 0; background-color: black; z-index: 3; padding: 20px">
+			<img src="img/logo.png"><br>Tile Layer requires JavaScript to function.<br>
+			<a href="https://github.com/TileLayerJS/TileLayer">Github Page</a>
+		</div>
+	</noscript>
+
+	<!-- body event helper -->
+	<div style="position: fixed; width: 100%; height: 100%; left: 0; top: 0; opacity: 0; background-color: transparent; z-index: -1" class="nomenu"></div>
+
+
+	<!-- top bar -->
+	<div id="idTopBar">
+		<div id="idTabs"></div>
+	</div>
+	<div id="topBarMargin"></div>
+
+
+	<!-- grid -->
+	<canvas id="idGridContainer" class="noTouch"></canvas>
+
+	<!-- palette -->
+	<div id="paletteContainer" class="noTouch nomenu">
+		<canvas id="idPalette" height="48"></canvas>
+		<canvas id="palettePreview" width="48" height="48"></canvas>
+	</div>
+
+	<!-- other -->
+	<div class="previewContainer">
+		<canvas id="idPreview"></canvas>
+	</div>
+	<input id="pixelColour" type="color" value="#ffffff" oninput="changeSelTile(this.value.slice(1))">
+	<t id="gridSizeText" class="nomenu">10x10</t>
+
+
+	<!-- export box -->
+	<div id="exportDiv" class="export">
+		<button id="buttonExportClose" class="exportClose" onclick="exportClose()">X</button>
+		<input type="text" id="exportString" size="50" style="max-width: initial; margin-bottom: 8px" readonly>
+		<div style="overflow: scroll; margin-left: -8px; padding: 8px; margin-right: 8px">
+			<textarea id="exportBox" rows="30" cols="50" readonly></textarea>
+		</div>
+	</div>
+
+	<!-- tooltip -->
+	<div id="idTooltip" class="tooltipHide">
+		<t id="idTooltipT" class="nomenu" style="white-space: pre"></t>
+	</div>
+
+
+	<!-- menus -->
+	<div id="idMasterMenu" class="menu">
+		<button class="closeButton" onclick="changeMenu()">X</button>
+
+		<div id="menuImport">
+			<header>Open</header>
+			<button disabled>Custom</button>
+			<br>
+			<button onclick="tilaImport('text', prompt('Enter document data (plain text)'))">Plain text</button>
+			<br>
+			<button onclick="filePrompt('.tila', 'text', true).then(val => tilaImport('tila', val))">TILA</button>
+			<!--div style="border: 1px dotted white">
+				..or drag file here
+			</div-->
+		</div>
+
+
+		<div id="menuExport">
+			<header>Export</header>
+			<button onclick="changeMenu('ExportFormat')">Custom</button>
+			<br>
+			<button onclick="tilaExport('text')">Plain text</button>
+			<br>
+			<button onclick="fileDownload('file.tila', 'data:application/json;charset=utf-8,', tilaExport('tila'))">TILA</button>
+		</div>
+
+		<div id="menuTileset">
+			<header>Tileset</header>
+			<button onclick="changeTiles('tila')">tila</button>
+			<br>
+			<button onclick="changeTiles('pixel')">pixel</button>
+			<hr>
+			<button onclick="filePrompt('.tpal', 'text').then(val => tpalImport(val))">Import</button>
+			<br>
+			<button onclick="if (localStorage.getItem('tpal') === null) { alert('no local storage present'); return; } tpalImport(localStorage.getItem('tpal'), localStorage.getItem('tpal-img'))">Local Storage</button>
+		</div>
+
+		<div id="menuSettings">
+			<header>Settings</header>
+			<div class="catDiv"></div>
+
+			<div id="cookieBack" class="barBottom">
+				<t id="cookieText" style="position: absolute; left: 56px; z-index: 1"></t>
+			</div>
+
+			<table id="settingsContainer"></table>
+
+			<button onclick="changeMenu()" style="position: absolute; left: 0; bottom: 0">Done</button>
+			<button id="setResetButton" onclick="cfgIni.reset()" style="position: absolute; right: 0; bottom: 0">Reset</button>
+		</div>
+
+		<div id="menuExportFormat">
+			<header>Custom Export</header>
+			<div style="display: flex">
+				<div style="margin-right: 20px">
+					<table>
+						<tr>
+							<td>Linebreak</td>
+							<td><input id="expNew" size="16" oninput="exportFormat.preview()" placeholder="empty"></td>
+						</tr>
+						<tr>
+							<td><hr></td>
+							<td><hr></td>
+						</tr>
+
+						<tr>
+							<td>Doc Start</td>
+							<td><input id="expD1" size="16" oninput="exportFormat.preview()" placeholder="empty"></td>
+						</tr>
+						<tr>
+							<td>Doc End</td>
+							<td><input id="expD2" size="16" oninput="exportFormat.preview()" placeholder="empty"></td>
+						</tr>
+						<tr>
+							<td><hr></td>
+							<td><hr></td>
+						</tr>
+
+
+						<tr>
+							<td>Tile Start</td>
+							<td><input id="expT1" size="16" oninput="exportFormat.preview()" placeholder="empty"></td>
+						</tr>
+						<tr>
+							<td>Tile End</td>
+							<td><input id="expT2" size="16" oninput="exportFormat.preview()" placeholder="empty"></td>
+						</tr>
+						<tr>
+							<td><hr></td>
+							<td><hr></td>
+						</tr>
+
+						<tr>
+							<td>Line Start</td>
+							<td><input id="expL1" size="16" oninput="exportFormat.preview()" placeholder="empty"></td>
+						</tr>
+						<tr>
+							<td>Line End</td>
+							<td><input id="expL2" size="16" oninput="exportFormat.preview()" placeholder="empty"></td>
+						</tr>
+					</table>
+					<hr>
+					<button onclick="exportFormat.formatImport()">Import Format</button>
+					<button onclick="exportFormat.formatExport()">Export Format</button>
+				</div>
+
+				<div>
+					<textarea id="expBox" rows="15" cols="30" style="white-space: pre" readonly></textarea>
+				</div>
+			</div>
+			<hr>
+			<button onclick="exportFormat.export()">Export</button>
+			<button onclick="changeMenu()">Cancel</button>
+		</div>
+
+
+		<div id="menuNew">
+			<header>New Document</header>
+			<table>
+				<tr>
+					<td>Size</td>
+					<td>
+						<input type="number" id="newWidth" min="1" max="999" placeholder="X" size="6">
+						<t style="font-family: monospace; margin: -1.8px;">x</t>
+						<input type="number" id="newHeight" min="1" max="999" placeholder="Y" size="6">
+					</td>
+				</tr>
+				<tr>
+					<td>Back</td>
+					<td><input id="newBack" min="1" value="0" size="12" placeholder="Tile ID"></td>
+				</tr>
+				<tr>
+					<td>Tileset</td>
+					<td><input id="newTileset" min="1" value="8" size="12" placeholder="Tileset Name"></td>
+				</tr>
+			</table>
+			<hr>
+
+			<button onclick="finishNewfile()">Create New</button>
+			<button onclick="changeMenu()">Cancel</button>
+		</div>
+
+		<div id="menuResize">
+			<header>Resize</header>
+			<input type="number" id="resizeWidth" min="1" max="999" placeholder="X" size="6">
+			<t style="font-family: monospace; margin: -1.8px;">x</t>
+			<input type="number" id="resizeHeight" min="1" max="999" placeholder="Y" size="6">
+			<hr>
+
+			<button onclick="finishResize()">Resize</button>
+			<button onclick="changeMenu()">Cancel</button>
+		</div>
+
+		<div id="menuKeys">
+			<header>Keys</header>
+			<table>
+				<tr>
+					<td><i>Global</i></td>
+					<td><hr></td>
+				</tr>
+				<tr>
+					<td>Esc</td>
+					<td>Close menu</td>
+				</tr>
+				<tr>
+					<td><i>Grid</i></td>
+					<td><hr></td>
+				</tr>
+				<tr>
+					<td>Alt</td>
+					<td>Use Eyedropper</td>
+				</tr>
+				<tr>
+					<td>0-9</td>
+					<td>Palette tiles 1 - 10</td>
+				</tr>
+				<tr>
+					<td><></td>
+					<td>Cycle through palette</td>
+				</tr>
+				<tr>
+					<td>-=</td>
+					<td>Zoom grid</td>
+				</tr>
+				<tr>
+					<td>~</td>
+					<td>Reset zoom</td>
+				</tr>
+			</table>
+			<hr>
+			<t title="At least, for now. Planned for 1.1">Keys cannot be modified</t>
+		</div>
+
+
+		<div id="menuAbout">
+			<header>About</header>
+			<!--<button onclick="changeMenu('prev')">Return</button><br>-->
+			<img src="img/logo.png"> v<a id="aboutVerId" href="https://github.com/TileLayerJS/TileLayer/releases" target="_blank"></a><br>
+			Browser based map editing / pixel art tool in JavaScript
+			<br>
+			<a href="https://github.com/TileLayerJS/TileLayer" target="_blank">
+				<button>Source Code</button>
+			</a>
+			<hr>
+			Tile Layer uses Local Storage to store settings
+			<!-- <a href="https://github.com/TileLayerJS/TileLayer/wiki/[local storage page]" target="_blank">Learn more.</a> -->
+		</div>
+
+		<div id="menuHome" class="menu homePage">
+			<img src="img/logo.png" onclick="changeMenu('About')" style="cursor: var(--cur-pointer)"> v<a id="homeVerId" href="https://github.com/TileLayerJS/TileLayer/releases" target="_blank"></a>
+			<br>
+
+			<div class="homeIcons">
+				<a onclick="changeMenu('Import')">
+				 <img src="img/home/import.png">Open Document</a>
+				<a href="https://github.com/TileLayerJS/TileLayer/wiki" target="_blank">
+					<img src="img/home/manual.png">Manual</a>
+				<a href="https://github.com/TileLayerJS/TileLayer" target="_blank">
+					<img src="img/home/source.png">Source Code</a>
+				<!--a href="https://www.youtube.com/@Tile-Layer" target="_blank">
+					<img src="img/home/channel.png">Channel</a-->
+			</div>
+
+
+			<div class="homeContainer">
+				<div onclick="changeTiles((cfg_tilesetStart.value === 'pixel') ? 'tila' : cfg_tilesetStart.value); makeGrid(); changeMenu('New')" class="homeMode tiles">
+					<header>Tiles</header>
+					Place down tiles based on tilesets.
+				</div>
+				<div onclick="changeTiles('pixel'); makeGrid(); changeMenu('New')" class="homeMode pixel">
+					<header>Pixel</header>
+					Freely place colours.
+				</div>
+			</div>
+
+			<button onclick="changeMenu()">Close</button>
+
+			<div class="homeCredits">
+				<a href="https://lemocha7.github.io" target="_blank">lemocha</a> 2021 - 2023
+			</div>
+		</div>
+
+		<div id="menuAlert">
+			<t id="alertText"></t>
+			<br>
+			<button id="alertButton">Okay</button>
+		</div>
+	</div>
+</body>
+
+<script>
+	var loaded = false;
+	const debug = (localStorage.getItem("debug") === "true");
+
+	// initialize elements as variables
+	const menu =
+	{
+		Import: document.getElementById("menuImport"),
+		Export: document.getElementById("menuExport"),
+		Tileset: document.getElementById("menuTileset"),
+		Settings: document.getElementById("menuSettings"),
+		ExportFormat: document.getElementById("menuExportFormat"),
+		New: document.getElementById("menuNew"),
+		Resize: document.getElementById("menuResize"),
+		Keys: document.getElementById("menuKeys"),
+		About: document.getElementById("menuAbout"),
+		Home: document.getElementById("menuHome"),
+		Alert: document.getElementById("menuAlert")
+	};
+	const gridContainer = document.getElementById("idGridContainer");
+	const palette = document.getElementById("idPalette");
+	const preview = document.getElementById("idPreview");
+	const topBar = document.getElementById("idTopBar");
+	const tabs = document.getElementById("idTabs");
+	const masterMenu = document.getElementById("idMasterMenu");
+	const tooltipT = document.getElementById("idTooltipT");
+</script>
+
+<script src="plugin.js"></script>
+<script src="toolButtons.js"></script>
+<script src="settings.js"></script>
+<script src="data.js"></script>
+<script src="script.js"></script>
+<script src="misc.js"></script>
+<script src="tooltip.js"></script>
 </html>
+
+
+
+<!-- lemocha - lemocha7.github.io -->
