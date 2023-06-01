@@ -314,7 +314,7 @@
 
 <script>
 	var loaded = false;
-	const debug = (localStorage.getItem("debug") === "true");
+	const debug = !(!navigator.cookieEnabled || localStorage.getItem("debug") !== "true");
 
 	// initialize elements as variables
 	const menu =
